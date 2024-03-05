@@ -2740,7 +2740,7 @@ ggplot(polys, aes(x = rts_area, y = rts_iou, color = imagery)) +
 
 ## Undetected Features
 
-```{r}
+```{r, fig.height = 4, fig.width = 4.5}
 knitr::kable(
   polys %>%
     as_tibble() %>%
@@ -2791,6 +2791,72 @@ ggplot(
 ) +
   geom_freqpoly() +
   scale_x_log10()
+
+ggplot(
+  polys %>%
+    filter(rts_iou == 0),
+  aes(x = rts_area/10000)
+) +
+  geom_histogram(data = polys,
+                 aes(x = rts_area/10000,
+                 fill = 'All RTS'),
+                 binwidth = 0.05) +
+  scale_fill_manual(name = '',
+                    values = 'gray70',
+                    guide = guide_legend(order = 2)) +
+  new_scale('fill') +
+  geom_histogram(aes(fill = imagery),
+                 binwidth = 0.05) +
+  scale_fill_manual(name = 'Undetected RTS',
+                    values = imagery_colors,
+                    labels = imagery_labels,
+                    guide = guide_legend(order = 3)) +
+  geom_vline(
+    data = polys %>%
+      summarise(rts_area_median = median(rts_area)/10000,
+                by = imagery),
+    aes(xintercept = rts_area_median, 
+        linetype = 'All RTS\nMedian')
+    ) +
+  geom_vline(
+    data = polys %>%
+      summarise(rts_area_mean = mean(rts_area)/10000,
+                by = imagery),
+    aes(xintercept = rts_area_mean, 
+        linetype = 'All RTS\nMean')
+    ) +
+  scale_linetype_manual(name = '',
+                        values = c('solid', 'dashed'),
+                    guide = guide_legend(order = 1)) +
+  scale_x_continuous(
+    name = 'RTS Area (ha)',
+    limits = c(0, 
+               mean(filter(polys, imagery == 'WorldView')$rts_area)/10000),
+    breaks = seq(0, 0.9, by = 0.1),
+    expand = expansion(mult = c(0, .05))
+    ) +
+  scale_y_continuous(name = 'Count') +
+  facet_grid(imagery ~ .) +
+  theme(legend.box.just = "left")
+# ggsave('./figures/undetected_rts_histogram.pdf',
+#        height = 4.5,
+#        width = 4.5)
+# ggsave('./figures/undetected_rts_histogram.jpg',
+#        height = 4.5,
+#        width = 4.5)
+
+polys %>%
+  filter(rts_iou == 0) %>%
+  st_drop_geometry() %>%
+  reframe(percent_less_than_0.1 = ecdf(rts_area/10000)(0.1), 
+          percent_less_than_0.15 = ecdf(rts_area/10000)(0.15), 
+          .by = imagery)
+
+ecdf(
+  polys %>%
+    filter(imagery == 'WorldView') %>%
+    pull(rts_area)
+    )(4612)
 
 ecdf(
   polys %>%
@@ -6273,5 +6339,56 @@ processing_hist
 #        processing_hist,
 #        height = 3,
 #        width = 5)
+```
+
+## Imagery Comparison Figure
+
+```{r}
+imagery_example_1 = ggplot(data = input_data %>%
+         filter(id == id_subset[2]) |>
+         mutate(x = x - mean(x),
+                y = y - mean(y),
+                .by = imagery)) +
+    geom_raster(aes(x = x, y = y, fill = color_hex),
+                inherit.aes = FALSE) +
+    scale_fill_manual(breaks = levels(input_data$color_hex),
+                      values = levels(input_data$color_hex),
+                      guide = 'none') +
+    facet_grid(. ~ imagery) +
+    theme(axis.title = element_blank(),
+          axis.text = element_blank(),
+          axis.ticks = element_blank(),
+          legend.position = 'bottom') +
+  coord_fixed(expand = FALSE)
+
+imagery_example_1
+
+imagery_example_2 = ggplot(data = input_data %>%
+         filter(id == id_subset[3]) |>
+         mutate(x = x - mean(x),
+                y = y - mean(y),
+                .by = imagery)) +
+    geom_raster(aes(x = x, y = y, fill = color_hex),
+                inherit.aes = FALSE) +
+    scale_fill_manual(breaks = levels(input_data$color_hex),
+                      values = levels(input_data$color_hex),
+                      guide = 'none') +
+    facet_grid(. ~ imagery) +
+    theme(axis.title = element_blank(),
+          axis.text = element_blank(),
+          axis.ticks = element_blank(),
+          legend.position = 'bottom') +
+  coord_fixed(expand = FALSE)
+
+imagery_example_2
+
+# ggsave('figures/imagery_example_1.jpg',
+#        imagery_example_1,
+#        height = 1.7,
+#        width = 10)
+# ggsave('figures/imagery_example_2.jpg',
+#        imagery_example_2,
+#        height = 3,
+#        width = 10)
 ```
 
