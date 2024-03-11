@@ -3854,10 +3854,10 @@ ggplot(zonal_stats_mean %>%
     labels = x_axis_labels,
     expand = expansion(mult = c(0.02, 0.033))
     ) +
-  scale_y_continuous(name = 'Z-Score') +
+  scale_y_continuous(name = expression(Delta~' z-score (RTS - BG)')) +
   scale_color_manual(values = pq_colors,
                        guide = 'none') +
-    facet_grid(rts_class ~ imagery,
+    facet_grid(. ~ imagery,
                scales = 'free_y') +
   theme(
     axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5),
@@ -6344,40 +6344,36 @@ processing_hist
 ## Imagery Comparison Figure
 
 ```{r}
-imagery_example_1 = ggplot(data = input_data %>%
-         filter(id == id_subset[2]) |>
-         mutate(x = x - mean(x),
-                y = y - mean(y),
-                .by = imagery)) +
-    geom_raster(aes(x = x, y = y, fill = color_hex),
-                inherit.aes = FALSE) +
-    scale_fill_manual(breaks = levels(input_data$color_hex),
-                      values = levels(input_data$color_hex),
-                      guide = 'none') +
-    facet_grid(. ~ imagery) +
-    theme(axis.title = element_blank(),
-          axis.text = element_blank(),
-          axis.ticks = element_blank(),
-          legend.position = 'bottom') +
+imagery_example_1 <- ggplot(data = input_data %>%
+                              filter(id == id_subset[2]) |>
+                              mutate(x = x - mean(x),
+                                     y = y - mean(y),
+                                     .by = imagery)) +
+  geom_raster(aes(x = x, y = y, fill = color_hex)) +
+  scale_fill_manual(breaks = levels(input_data$color_hex),
+                    values = levels(input_data$color_hex),
+                    guide = 'none') +
+  facet_grid(. ~ imagery) +
+  theme(axis.title = element_blank(),
+        axis.text = element_blank(),
+        axis.ticks = element_blank()) +
   coord_fixed(expand = FALSE)
 
 imagery_example_1
 
-imagery_example_2 = ggplot(data = input_data %>%
-         filter(id == id_subset[3]) |>
-         mutate(x = x - mean(x),
-                y = y - mean(y),
-                .by = imagery)) +
-    geom_raster(aes(x = x, y = y, fill = color_hex),
-                inherit.aes = FALSE) +
-    scale_fill_manual(breaks = levels(input_data$color_hex),
-                      values = levels(input_data$color_hex),
-                      guide = 'none') +
-    facet_grid(. ~ imagery) +
-    theme(axis.title = element_blank(),
-          axis.text = element_blank(),
-          axis.ticks = element_blank(),
-          legend.position = 'bottom') +
+imagery_example_2 <- ggplot(data = input_data %>%
+                              filter(id == id_subset[3]) |>
+                              mutate(x = x - mean(x),
+                                     y = y - mean(y),
+                                     .by = imagery)) +
+  geom_raster(aes(x = x, y = y, fill = color_hex)) +
+  scale_fill_manual(breaks = levels(input_data$color_hex),
+                    values = levels(input_data$color_hex),
+                    guide = 'none') +
+  facet_grid(. ~ imagery) +
+  theme(axis.title = element_blank(),
+        axis.text = element_blank(),
+        axis.ticks = element_blank()) +
   coord_fixed(expand = FALSE)
 
 imagery_example_2
@@ -6390,5 +6386,190 @@ imagery_example_2
 #        imagery_example_2,
 #        height = 3,
 #        width = 10)
+```
+
+## Imagery Layers Figure
+
+```{r}
+example_input_data <- maxar_input[id_subset[3]][[1]]
+
+# RGB (from input_data tibble)
+example_input_rgb <- ggplot(
+  data = input_data %>%
+    filter(id == id_subset[3] & imagery == 'WorldView') |>
+    mutate(x = x - mean(x),
+           y = y - mean(y))
+) +
+  geom_raster(aes(x = x, y = y, fill = color_hex)) +
+  scale_fill_manual(breaks = levels(input_data$color_hex),
+                    values = levels(input_data$color_hex),
+                    guide = 'none') +
+  theme(axis.title = element_blank(),
+        axis.text = element_blank(),
+        axis.ticks = element_blank()) +
+  coord_fixed(expand = FALSE) +
+  facet_grid(. ~ 'RGB')
+
+# example_input_rgb
+
+# NIR
+nir <- example_input_data %>%
+    subset('SENT_NIR') %>%
+    as.data.frame(xy = TRUE)
+
+example_input_nir <- ggplot(nir) +
+  geom_raster(aes(x = x, y = y, fill = SENT_NIR)) +
+  scale_fill_viridis(name = '',
+                     breaks = c(
+                       min(nir$nir, na.rm = TRUE),
+                       max(nir$nir, na.rm = TRUE)
+                     ),
+                     labels = c('Low', 'High')) +
+  theme(axis.title = element_blank(),
+        axis.text = element_blank(),
+        axis.ticks = element_blank()) +
+  coord_fixed(expand = FALSE) +
+  facet_grid(. ~ 'NIR')
+
+# example_input_nir
+
+# NDVI
+ndvi <- example_input_data %>%
+    subset('ndvi') %>%
+    as.data.frame(xy = TRUE)
+
+example_input_ndvi <- ggplot(ndvi) +
+  geom_raster(aes(x = x, y = y, fill = ndvi)) +
+  scale_fill_viridis(name = '',
+                     breaks = c(
+                       min(ndvi$ndvi, na.rm = TRUE),
+                       max(ndvi$ndvi, na.rm = TRUE)
+                       ),
+                     labels = c('Low', 'High')) +
+  theme(axis.title = element_blank(),
+        axis.text = element_blank(),
+        axis.ticks = element_blank()) +
+  coord_fixed(expand = FALSE) +
+  facet_grid(. ~ 'NDVI')
+
+# example_input_ndvi
+
+# NDWI
+ndwi <- example_input_data %>%
+    subset('ndwi') %>%
+    as.data.frame(xy = TRUE)
+
+example_input_ndwi <- ggplot(ndwi) +
+  geom_raster(aes(x = x, y = y, fill = ndwi)) +
+  scale_fill_viridis(name = '',
+                     breaks = c(
+                       min(ndwi$ndwi, na.rm = TRUE),
+                       max(ndwi$ndwi, na.rm = TRUE)
+                     ),
+                     labels = c('Low', 'High')) +
+  theme(axis.title = element_blank(),
+        axis.text = element_blank(),
+        axis.ticks = element_blank()) +
+  coord_fixed(expand = FALSE) +
+  facet_grid(. ~ 'NDWI')
+
+# example_input_ndwi
+
+# Relative Elevation
+elev <- example_input_data %>%
+    subset('relative_elevation') %>%
+    as.data.frame(xy = TRUE)
+
+example_input_elev <- ggplot(elev) +
+  geom_raster(aes(x = x, y = y, fill = relative_elevation)) +
+  scale_fill_viridis(name = '',
+                     breaks = c(
+                       min(elev$relative_elevation, na.rm = TRUE),
+                       max(elev$relative_elevation, na.rm = TRUE)
+                     ),
+                     labels = c('Low', 'High')) +
+  theme(axis.title = element_blank(),
+        axis.text = element_blank(),
+        axis.ticks = element_blank()) +
+  coord_fixed(expand = FALSE) +
+  facet_grid(. ~ 'Relative Elevation')
+
+# example_input_elev
+
+# Shaded Relief
+sr <- example_input_data %>%
+    subset('shaded_relief') %>%
+    as.data.frame(xy = TRUE)
+
+example_input_sr <- ggplot(sr) +
+  geom_raster(aes(x = x, y = y, fill = shaded_relief)) +
+  scale_fill_viridis(name = '',
+                     breaks = c(
+                       min(sr$shaded_relief, na.rm = TRUE),
+                       max(sr$shaded_relief, na.rm = TRUE)
+                     ),
+                     labels = c('Low', 'High')) +
+  theme(axis.title = element_blank(),
+        axis.text = element_blank(),
+        axis.ticks = element_blank()) +
+  coord_fixed(expand = FALSE) +
+  facet_grid(. ~ 'Shaded Relief')
+
+# example_input_sr
+
+# RTS Label
+label <- example_input_data %>%
+    subset('RTSlabel') %>%
+    as.data.frame(xy = TRUE, na.rm = FALSE) %>%
+  mutate(
+    RTSlabel = case_when(
+      RTSlabel == 1 ~ factor('RTS', 
+                             levels = c('RTS', 'Background')),
+      is.na(RTSlabel) ~ factor('Background', 
+                               levels = c('RTS', 'Background')))
+  )
+
+example_input_label <- ggplot(label) +
+  geom_tile(
+    aes(x = x, y = y, fill = RTSlabel), 
+    color = 'black'
+    ) +
+  scale_fill_manual(name = 'RTS Label',
+                    values = c('black', 'white')) +
+  new_scale('fill') +
+  geom_raster(
+    aes(x = x, y = y, fill = RTSlabel)
+    ) +
+  scale_fill_manual(values = c('black', 'white'),
+                    guide = FALSE) +
+  theme(axis.title = element_blank(),
+        axis.text = element_blank(),
+        axis.ticks = element_blank()) +
+  coord_fixed(expand = FALSE) +
+  facet_grid(. ~ 'RTS Label')
+
+example_input_label
+```
+
+```{r}
+input_layers_example <- example_input_rgb + 
+  example_input_nir +
+  example_input_ndvi + 
+  example_input_ndwi +
+  example_input_elev + 
+  example_input_sr +
+  example_input_label + 
+  guide_area() +
+  plot_layout(nrow = 4,
+              guides = 'collect') &
+  theme(legend.title = element_blank()) &
+  coord_fixed(expand = FALSE)
+
+input_layers_example
+
+# ggsave('figures/input_layers_example.jpg',
+#        input_layers_example,
+#        height = 11,
+#        width = 6.5)
 ```
 
