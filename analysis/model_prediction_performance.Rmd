@@ -6,10 +6,6 @@ output:
 
 # RTS Model Imagery Performance Analysis
 
-## TODO:
-
-- finish figure with zonal stats results 
-
 ## Set-Up
 ```{r setup, include = FALSE}
 knitr::opts_chunk$set(echo = FALSE)
@@ -475,53 +471,66 @@ plot_individual_prediction <- function(imagery_type, raster_data, vector_data, d
     scale_fill_manual(breaks = levels(input_data$color_hex),
                       values = levels(input_data$color_hex),
                       guide = 'none') +
+    new_scale('fill') +
+    geom_sf(aes(geometry = inverse_mask_geometry,
+                fill = 'Masked\nArea',
+                alpha = 'Masked\nArea'),
+            color = 'transparent') +
+    scale_fill_manual(name = 'Masked\nArea',
+                      values = 'black',
+                      drop = FALSE,
+                      guide = guide_legend(
+                        order = 3,
+                        label = FALSE
+                      )
+    ) +
+    scale_alpha_manual(name = 'Masked\nArea',
+                       values = 0.5,
+                       drop = FALSE,
+                       guide = guide_legend(
+                         order = 3,
+                        label = FALSE
+                       )
+   ) +
     geom_sf(aes(geometry = val_geometry,
-                color = 'Ground\nTruth',
-                linewidth = 'Ground\nTruth'),
+                color = 'Other\nRTS',
+                linewidth = 'Other\nRTS'),
             fill = 'transparent') +
-    scale_color_manual(name = '',
+    scale_color_manual(name = 'Other\nRTS',
                        values = c('gray70'),
-                       guide = guide_legend(order = 4)
+                       guide = guide_legend(
+                         order = 4,
+                         label = FALSE
+                       )
                        ) +
-    scale_linewidth_manual(name = '',
+    scale_linewidth_manual(name = 'Other\nRTS',
                            values = c(0.25),
-                           guide = guide_legend(order = 4)
+                           guide = guide_legend(
+                             order = 4,
+                             label = FALSE
+                             )
                            ) +
     new_scale('color') +
     new_scale('linewidth') +
     geom_sf(aes(geometry = rts_geometry,
-                color = 'Feature of\nInterest',
-                linewidth = 'Feature of\nInterest'),
+                color = 'RTS of\nInterest',
+                linewidth = 'RTS of\nInterest'),
             fill = 'transparent') +
-    scale_color_manual(name = '',
+    scale_color_manual(name = 'RTS of\nInterest',
                        values = c('gray90'),
                        drop = FALSE,
-                       guide = guide_legend(order = 2)
+                       guide = guide_legend(
+                         order = 2,
+                         label = FALSE
+                         )
                        ) +
-    scale_linewidth_manual(name = '',
+    scale_linewidth_manual(name = 'RTS of\nInterest',
                            values = c(0.5),
-                           guide = guide_legend(order = 2)
+                           guide = guide_legend(
+                             order = 2,
+                             label = FALSE
+                             )
                            ) +
-    new_scale('color') +
-    new_scale('linewidth') +
-    geom_sf(aes(geometry = mask_geometry,
-                color = 'Mask',
-                linewidth = 'Mask',
-                linetype = 'Mask'),
-            fill = 'transparent') +
-    scale_color_manual(name = '',
-                       values = 'gray90',
-                       drop = FALSE,
-                       guide = guide_legend(order = 3)
-                       ) +
-    scale_linewidth_manual(name = '',
-                           values = c(0.25),
-                           guide = guide_legend(order = 3)
-                           ) +
-    scale_linetype_manual(name = '',
-                          values = c('dashed'),
-                          guide = guide_legend(order = 3)
-                          ) +
     new_scale('color') +
     geom_sf(aes(geometry = pred_geometry,
                 color = pq_ci),
@@ -768,7 +777,7 @@ plot_pred_rgb_2 <- function(pid, imagery_types, dims) {
   current_polys <- polys %>%
     filter(id == pid) %>%
     select(imagery, id, status, rts_iou, pq_ci, pq_ci_size, bbox_geometry, 
-           mask_geometry, rts_geometry, val_geometry, pred_geometry) %>%
+           inverse_mask_geometry, rts_geometry, val_geometry, pred_geometry) %>%
     mutate(status = factor(status, levels = c('Active', 'General')))
   
   # prep RGB data
@@ -2131,28 +2140,44 @@ polys <- polys %>%
               as_tibble() %>%
               select(imagery, id, mask_geometry = geometry),
             by = c('imagery', 'id')) %>%
-  mutate(pred_geometry = st_as_sfc(pmap(list(pred_geometry, 
-                                             mask_geometry), 
-                                        ~ st_intersection(...)),
-                                   crs = crs(polys)),
-         pred_bg_geometry = st_as_sfc(pmap(list(pred_bg_geometry, 
-                                                mask_geometry), 
-                                           ~ st_intersection(...)),
-                                      crs = crs(polys)),
-         val_mask_geometry = st_as_sfc(pmap(list(val_geometry, 
-                                                 mask_geometry), 
-                                            ~ st_intersection(...)),
-                                       crs = crs(polys)),
-         val_bg_mask_geometry = st_as_sfc(pmap(list(val_bg_geometry, 
-                                                    mask_geometry), 
-                                               ~ st_intersection(...)),
-                                          crs = crs(polys)),
-         val_area = as.numeric(st_area(val_mask_geometry)),
-         val_shape = as.numeric(
-           4*pi*val_area/st_perimeter(val_mask_geometry)^2
-         ), # calculate Polsby-Popper value (shape compactness/roundness)
-         imagery = factor(imagery,
-                          levels = c('WorldView', 'PlanetScope', 'Sentinel-2')))
+  mutate(
+    pred_geometry = st_as_sfc(
+      pmap(list(pred_geometry, 
+                mask_geometry), 
+           ~ st_intersection(...)),
+      crs = crs(polys)
+    ),
+    pred_bg_geometry = st_as_sfc(
+      pmap(list(pred_bg_geometry, 
+                mask_geometry), 
+           ~ st_intersection(...)),
+      crs = crs(polys)
+    ),
+    val_mask_geometry = st_as_sfc(
+      pmap(list(val_geometry, 
+                mask_geometry), 
+           ~ st_intersection(...)),
+      crs = crs(polys)
+    ),
+    val_bg_mask_geometry = st_as_sfc(
+      pmap(list(val_bg_geometry, 
+                mask_geometry), 
+           ~ st_intersection(...)),
+      crs = crs(polys)
+    ),
+    inverse_mask_geometry = st_as_sfc(
+      pmap(list(bbox_geometry, 
+                mask_geometry), 
+           ~ st_difference(...)),
+      crs = crs(polys)
+    ),
+    val_area = as.numeric(st_area(val_mask_geometry)),
+    val_shape = as.numeric(
+      4*pi*val_area/st_perimeter(val_mask_geometry)^2
+    ), # calculate Polsby-Popper value (shape compactness/roundness)
+    imagery = factor(imagery,
+                     levels = c('WorldView', 'PlanetScope', 'Sentinel-2'))
+  )
 rm(masks)
 ```
 
@@ -2472,6 +2497,12 @@ iou <- polys %>%
             .by = 'imagery') %>%
   select(Imagery = imagery, `RTS IoU` = rts_iou, `RTS IoU (remove zeros)` = rts_iou_v2, `Val IoU` = mean_iou, `Val IoU (remove zeros)` = mean_iou_v2)
 knitr::kable(iou, caption = 'IoU (Calculated Directly from Predictions)')
+```
+
+```{r}
+iou_anova = lm(rts_iou ~ imagery, data = polys)
+summary(iou_anova)
+emmeans(iou_anova, specs = pairwise~imagery)
 ```
 
 ### Investigate RTS vs. Background Coverage
@@ -5633,11 +5664,82 @@ rts_highlights_plot
 # ggsave('./figures/rts_highlights.pdf',
 #        rts_highlights_plot,
 #        height = 9,
-#        width = 6.5)
+#        width = 5)
 # ggsave('./figures/rts_highlights.jpg',
 #        rts_highlights_plot,
 #        height = 9,
-#        width = 6.5)
+#        width = 5)
+```
+
+```{r, fig.height = 4, fig.width = 3}
+# get polygon data
+current_polys <- polys %>%
+  filter(id == id_subset[3]) %>%
+  select(imagery, id, status, rts_iou, pq_ci, pq_ci_size, bbox_geometry, 
+         inverse_mask_geometry, rts_geometry, val_geometry, pred_geometry) %>%
+  mutate(status = factor(status, levels = c('Active', 'General')),
+         pq_ci = factor('High',
+                             levels = c('High', 'Expected', 'Low')))
+
+# prep RGB data
+current_rast <- input_data %>%
+  filter(id == id_subset[3]) %>%
+  full_join(current_polys %>%
+              select(id, imagery, rts_iou),
+            by = c('imagery', 'id', 'rts_iou'))
+
+# get map dimensions
+map_dimensions <- polys %>%
+  filter(id %in% id_subset) %>%
+  st_as_sf(crs = 3413) %>%
+  bind_cols(map_dfr(.$rts_geometry, 
+               ~ st_bbox(.x))) %>%
+  as_tibble() %>%
+  mutate(x_spread = (xmax - xmin)*1.25,
+         y_spread = (ymax - ymin)*1.25) %>%
+  summarise(x_spread_max = max(x_spread),
+            y_spread_max = max(y_spread))
+
+# get desired extent of current tile
+current_dims <- current_polys %>%
+  slice(1) %>%
+  st_as_sf(crs = 3413) %>%
+  bind_cols(map_dfr(.$rts_geometry, 
+                    ~ st_bbox(.x))) %>%
+  mutate(x_min = (xmin + xmax)/2 - map_dimensions$x_spread_max/2,
+         x_max = (xmin + xmax)/2 + map_dimensions$x_spread_max/2,
+         y_min = (ymin + ymax)/2 - map_dimensions$y_spread_max/2,
+         y_max = (ymin + ymax)/2 + map_dimensions$y_spread_max/2) %>%
+  select(x_min, x_max, y_min, y_max)
+
+# make a map for each imagery type separately
+figures <- map(
+  imagery_labels,
+  ~ plot_individual_prediction(.x, current_rast, current_polys, current_dims) +
+    facet_grid(imagery ~ .)
+)
+
+figure <- (
+  figures[[1]] +
+    scale_color_manual(name = 'Prediction', values = pq_colors[1])
+) / (
+  figures[[2]] +
+    scale_color_manual(name = 'Prediction', values = pq_colors[1])
+) / (
+  figures[[3]] +
+    scale_color_manual(name = 'Prediction', values = pq_colors[1])
+) +
+  plot_layout(guides = 'collect') & 
+  theme(legend.position = 'right',
+        legend.text = element_blank(),
+        strip.text = element_text(size = 20))
+
+figure
+
+# ggsave('./figures/prediction_example_vertical.jpg',
+#        figure,
+#        height = 4,
+#        width = 3)
 ```
 
 
@@ -6378,10 +6480,32 @@ imagery_example_2 <- ggplot(data = input_data %>%
 
 imagery_example_2
 
+imagery_example_2b <- ggplot(data = input_data %>%
+                              filter(id == id_subset[3]) |>
+                              mutate(x = x - mean(x),
+                                     y = y - mean(y),
+                                     .by = imagery)) +
+  geom_raster(aes(x = x, y = y, fill = color_hex)) +
+  scale_fill_manual(breaks = levels(input_data$color_hex),
+                    values = levels(input_data$color_hex),
+                    guide = 'none') +
+  facet_grid(imagery ~ .) +
+  theme(axis.title = element_blank(),
+        axis.text = element_blank(),
+        axis.ticks = element_blank(),
+        panel.grid = element_blank()) +
+  coord_fixed(expand = FALSE)
+
+imagery_example_2b
+
 # ggsave('figures/imagery_example_1.jpg',
 #        imagery_example_1,
 #        height = 1.7,
 #        width = 10)
+# ggsave('figures/imagery_example_2_vertical.jpg',
+#        imagery_example_2b,
+#        height = 4,
+#        width = 2)
 # ggsave('figures/imagery_example_2.jpg',
 #        imagery_example_2,
 #        height = 3,
@@ -6562,7 +6686,9 @@ input_layers_example <- example_input_rgb +
   guide_area() +
   plot_layout(nrow = 4,
               guides = 'collect') &
-  theme(legend.title = element_blank()) &
+  theme(legend.title = element_blank(),
+        legend.text = element_text(size = 20),
+        strip.text = element_text(size = 20)) &
   coord_fixed(expand = FALSE)
 
 input_layers_example
