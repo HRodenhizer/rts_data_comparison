@@ -1494,12 +1494,12 @@ pred_as_poly <- function(prediction, threshold = 0.5) {
   layer[layer >= threshold] <- 1
   layer[layer < threshold] <- 0
   poly <- st_as_sf(as.polygons(layer, values = TRUE)) %>%
-    rename(tk_class = prediction) %>%
+    rename(tk_class = prediction, pred_bg_geometry = geometry) %>%
     mutate(tk_class = case_when(tk_class == 0 ~ 'pred_bg',
                                 tk_class == 1 ~ 'pred'),
            id = get_rast_id(prediction)) %>%
     pivot_wider(names_from = 'tk_class',
-                values_from = 'geometry',
+                values_from = 'pred_bg_geometry',
                 names_glue = '{tk_class}_geometry') %>%
     st_set_geometry('pred_geometry')
   if (!('pred_geometry' %in% colnames(poly))) {
@@ -1594,12 +1594,12 @@ val_as_poly <- function(prediction) {
                            byrow = TRUE))
   current_id <- get_rast_id(prediction)
   poly <- st_as_sf(as.polygons(layer, values = TRUE)) %>%
-    rename(tk_class = validation) %>%
+    rename(tk_class = validation, val_bg_geometry = geometry) %>%
     mutate(tk_class = case_when(tk_class == 0 ~ 'val_bg',
                                 tk_class == 1 ~ 'val'),
            id = current_id) %>%
     pivot_wider(names_from = 'tk_class',
-                values_from = 'geometry',
+                values_from = 'val_bg_geometry',
                 names_glue = '{tk_class}_geometry') %>%
     st_set_geometry('val_geometry')
   
@@ -2844,6 +2844,7 @@ ggplot(
                     guide = guide_legend(order = 3)) +
   geom_vline(
     data = polys %>%
+      st_drop_geometry() %>%
       summarise(rts_area_median = median(rts_area)/10000,
                 by = imagery),
     aes(xintercept = rts_area_median, 
@@ -2851,6 +2852,7 @@ ggplot(
     ) +
   geom_vline(
     data = polys %>%
+      st_drop_geometry() %>%
       summarise(rts_area_mean = mean(rts_area)/10000,
                 by = imagery),
     aes(xintercept = rts_area_mean, 
@@ -3144,6 +3146,42 @@ ggplot(polys,
 # ggsave('./figures/area_iou.jpg',
 #        height = 4,
 #        width = 6.5)
+```
+```{r, fig.width = 6.5, fig.height = 4}
+ggplot(polys, 
+       aes(x = rts_area, 
+           y = rts_iou)) +
+  geom_point(aes(color = pq_ci), size = 1) +
+  scale_color_manual(name = 'Prediction\nQuality',
+                     values = pq_colors) +
+  new_scale('color') +
+  geom_ribbon(data = iou_ci,
+              aes(x = rts_area, ymin = lwr, ymax = upr),
+              fill = 'gray50',
+              alpha = 0.2,
+              inherit.aes = FALSE) +
+  geom_line(data = iou_ci, 
+            aes(x = rts_area, y = prediction, color = imagery),
+            inherit.aes = FALSE) +
+  scale_color_manual(name = 'Imagery',
+                     values = imagery_colors,
+                     guide = 'none') +
+  scale_x_continuous(name = expression('RTS Area (ha)'),
+                     minor_breaks = seq(0, 125000, by = 5000),
+                     labels = function(x)x/10000) +
+  scale_y_continuous(name = 'IoU',
+                     limits = c(-0.1, 1),
+                     expand = expansion(mult = 0),
+                     minor_breaks = seq(-0.1, 1, by = 0.05)) +
+  scale_shape_manual(name = 'Region',
+                     labels = c('Other', 'Yamal/\nGydan'),
+                     values = c(1, 16)) +
+  facet_grid(. ~ imagery) +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1))
+
+# ggsave('./figures/area_iou_for_GA.jpg',
+#        height = 4,
+#        width = 6)
 ```
 
 ```{r}
@@ -3821,8 +3859,8 @@ ggplot(zonal_stats_mean %>%
     expand = expansion(mult = c(0.02, 0.033))
     ) +
   scale_y_continuous(name = 'Z-Score') +
-  scale_color_manual(values = pq_colors,
-                       guide = 'none') +
+  scale_color_manual(name = 'Prediction\nQuality',
+                     values = pq_colors) +
     facet_grid(rts_class ~ imagery,
                scales = 'free_y') +
   theme(
@@ -3886,8 +3924,8 @@ ggplot(zonal_stats_mean %>%
     expand = expansion(mult = c(0.02, 0.033))
     ) +
   scale_y_continuous(name = expression(Delta~' z-score (RTS - BG)')) +
-  scale_color_manual(values = pq_colors,
-                       guide = 'none') +
+  scale_color_manual(name = "Prediction\nQuality",
+                     values = pq_colors) +
     facet_grid(. ~ imagery,
                scales = 'free_y') +
   theme(
@@ -5713,26 +5751,83 @@ current_dims <- current_polys %>%
   select(x_min, x_max, y_min, y_max)
 
 # make a map for each imagery type separately
-figures <- map(
-  imagery_labels,
-  ~ plot_individual_prediction(.x, current_rast, current_polys, current_dims) +
-    facet_grid(imagery ~ .)
-)
+# select current RGB imagery data
+figures <- list()
+for (idx in 1:3) {
+  
+  imagery_type = imagery_labels[idx]
+  
+  rgb <- current_rast %>%
+    filter(imagery == imagery_type)
+  
+  vector <- current_polys %>%
+    filter(imagery == imagery_type)
+  label <- paste('IoU:', round(vector$rts_iou, 2))
+  
+  figures[[idx]] <- ggplot(data = vector) +
+    geom_raster(data = rgb,
+                aes(x = x, y = y, fill = color_hex),
+                inherit.aes = FALSE) +
+    scale_fill_manual(breaks = levels(input_data$color_hex),
+                      values = levels(input_data$color_hex),
+                      guide = 'none') +
+    new_scale('fill') +
+    geom_sf(aes(geometry = rts_geometry,
+                color = 'RTS of\nInterest',
+                linewidth = 'RTS of\nInterest'),
+            fill = 'transparent') +
+    scale_color_manual(name = 'RTS of\nInterest',
+                       values = c('gray90'),
+                       drop = FALSE,
+                       guide = guide_legend(
+                         order = 2,
+                         label = FALSE
+                       )
+    ) +
+    scale_linewidth_manual(name = 'RTS of\nInterest',
+                           values = c(0.5),
+                           guide = guide_legend(
+                             order = 2,
+                             label = FALSE
+                           )
+    ) +
+    new_scale('color') +
+    geom_sf(aes(geometry = pred_geometry, color = 'Prediction'),
+            fill = 'transparent',
+            linewidth = 0.5) +
+    scale_color_manual(name = 'Prediction', values = 'black') +
+    geom_label(x = current_dims$x_min,
+               y = current_dims$y_min,
+               label = label,
+               size = 2.5,
+               hjust = 0,
+               vjust = 0,
+               label.padding = unit(0.1, 'lines'),
+               label.r = unit(0, 'lines'),
+               label.size = unit(0, 'lines')) +
+    coord_sf(xlim = c(current_dims$x_min, current_dims$x_max),
+             ylim = c(current_dims$y_min, current_dims$y_max),
+             expand = FALSE) +
+    facet_grid(imagery ~ .) +
+    theme(axis.title = element_blank(),
+          axis.text = element_blank(),
+          axis.ticks = element_blank(),
+          strip.text.y = element_text(size = 10),
+          legend.text = element_blank(),
+          panel.grid = element_blank(),
+          plot.margin = margin(0, 0, 0, 0, "pt"))
+}
+
+figures[[1]]
 
 figure <- (
-  figures[[1]] +
-    scale_color_manual(name = 'Prediction', values = pq_colors[1])
+  figures[[1]]
 ) / (
-  figures[[2]] +
-    scale_color_manual(name = 'Prediction', values = pq_colors[1])
+  figures[[2]]
 ) / (
-  figures[[3]] +
-    scale_color_manual(name = 'Prediction', values = pq_colors[1])
+  figures[[3]]
 ) +
-  plot_layout(guides = 'collect') & 
-  theme(legend.position = 'right',
-        legend.text = element_blank(),
-        strip.text = element_text(size = 20))
+  plot_layout(guides = 'collect')
 
 figure
 
